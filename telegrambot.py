@@ -1,65 +1,59 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+PUBLIC NUMBER LOOKUP BOT — RENDER READY
+Auto-Delete: 40s | Second Bot Backup | User Profile Log
+"""
+
 import requests
 import json
 import os
 import time
 import threading
 from datetime import datetime
+from pathlib import Path
 
 # ============================================================
-# CONFIG
+# CONFIG — ENVIRONMENT VARIABLES
 # ============================================================
-# तेरा मेन बॉट (यूज़र्स के लिए)
-TELEGRAM_TOKEN = '8828522785:AAFn5vykRq1JRMor0xhVknM4t-iBSRYdogg'
+TELEGRAM_TOKEN = os.environ.get('TELEGRAM_TOKEN', '8828522785:AAFn5vykRq1JRMor0xhVknM4t-iBSRYdogg')
+SECOND_BOT_TOKEN = os.environ.get('SECOND_BOT_TOKEN', '8971907815:AAEKNI_tCtjbXgUp-pi5-TPNecYI1wXJqcA')
+ALPHA_CHAT_ID = os.environ.get('ALPHA_CHAT_ID', '8207657563')
+TRACEX_API_KEY = os.environ.get('TRACEX_API_KEY', 'tx_9e7daa9c251d3d29093393ab845b0ea6')
 
-# तेरा दूसरा प्राइवेट बॉट (सिर्फ तेरे लिए — सेफ्टी कॉपी)
-SECOND_BOT_TOKEN = '8971907815:AAEKNI_tCtjbXgUp-pi5-TPNecYI1wXJqcA'
-ALPHA_CHAT_ID = '8207657563'  # ← तेरा टेलीग्राम Chat ID (इसे सही कर ले)
-
-TRACEX_API_KEY = 'tx_9e7daa9c251d3d29093393ab845b0ea6'
 TRACEX_URL = 'https://tracexdata-api.onrender.com/api/lookup'
 
-LOG_FILE = r'C:\Windows File\MS Word\botRespons.txt'
+# ============================================================
+# PATHS — Render Compatible
+# ============================================================
+BASE_DIR = Path(__file__).parent
+LOG_DIR = BASE_DIR / "logs"
+LOG_FILE = LOG_DIR / "botRespons.txt"
+LOG_DIR.mkdir(parents=True, exist_ok=True)
 
 # ============================================================
 # FALTOO FIELDS REMOVER
 # ============================================================
 FIELDS_TO_REMOVE = [
-    "api_buy_link",
-    "website_link",
-    "buy_api_link",
-    "site_link",
-    "purchase_link",
-    "api_purchase_url",
-    "buy_link",
-    "promo_link",
-    "ad_link",
-    "sponsored_link"
+    "api_buy_link", "website_link", "buy_api_link", "site_link",
+    "purchase_link", "api_purchase_url", "buy_link", "promo_link",
+    "ad_link", "sponsored_link"
 ]
 
 def clean_json(data):
-    """पूरे JSON में से फालतू फील्ड हटाओ — रिकर्सिवली।"""
     if isinstance(data, dict):
         keys_to_delete = []
         for key in data:
             if key.lower() in [f.lower() for f in FIELDS_TO_REMOVE]:
                 keys_to_delete.append(key)
-        
         for key in keys_to_delete:
             del data[key]
-        
         for key, value in data.items():
             data[key] = clean_json(value)
-    
     elif isinstance(data, list):
         for i in range(len(data)):
             data[i] = clean_json(data[i])
-    
     return data
-
-# ============================================================
-# ENSURE DIRECTORIES EXIST
-# ============================================================
-os.makedirs(os.path.dirname(LOG_FILE), exist_ok=True)
 
 # ============================================================
 # LOG FUNCTION
@@ -77,7 +71,7 @@ def log_to_file(data):
         print(f"⚠️ Log Error: {e}")
 
 # ============================================================
-# SEND MESSAGE TO MAIN BOT (यूज़र्स के लिए)
+# SEND MESSAGE TO MAIN BOT
 # ============================================================
 def send_telegram(chat_id, message):
     url = f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage'
@@ -95,7 +89,7 @@ def send_telegram(chat_id, message):
         return None
 
 # ============================================================
-# 🗑️ AUTO-DELETE MESSAGE (40 सेकंड बाद डिलीट)
+# AUTO-DELETE MESSAGE (40 सेकंड बाद)
 # ============================================================
 def auto_delete_message(chat_id, message_id, delay=40):
     time.sleep(delay)
@@ -104,43 +98,27 @@ def auto_delete_message(chat_id, message_id, delay=40):
     try:
         response = requests.post(url, data=data, timeout=10)
         if response.status_code == 200:
-            print(f"🗑️ मैसेज डिलीट: User={chat_id}, MsgID={message_id}")
+            print(f"🗑️ Deleted: User={chat_id}, MsgID={message_id}")
         else:
             print(f"⚠️ Delete Error: {response.json()}")
     except Exception as e:
         print(f"❌ Delete Error: {e}")
 
 # ============================================================
-# 📤 SEND TO SECOND BOT (यूज़र प्रोफाइल + डेटा — परमानेंट)
+# SEND TO SECOND BOT (सुरक्षित कॉपी)
 # ============================================================
 def send_to_second_bot(number, data, user_info_dict):
-    """
-    डेटा + यूज़र की पूरी प्रोफाइल तेरे प्राइवेट बॉट पर भेजो।
-    """
     try:
-        # डेटा साफ करो
         cleaned_data = clean_json(data)
         json_str = json.dumps(cleaned_data, indent=2, ensure_ascii=False)
-        
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         current_time = datetime.now().strftime('%Y-%m-%d %H:%M:%S')
         
-        # =========================================
-        # 📁 JSON फाइल की तरह भेजो
-        # =========================================
+        # JSON File Send
         url = f'https://api.telegram.org/bot{SECOND_BOT_TOKEN}/sendDocument'
-        
         filename = f"{number}_{timestamp}.json"
+        files = {'document': (filename, json_str.encode('utf-8'), 'application/json')}
         
-        files = {
-            'document': (
-                filename,
-                json_str.encode('utf-8'),
-                'application/json'
-            )
-        }
-        
-        # 🔥 यूज़र की पूरी प्रोफाइल के साथ कैप्शन
         caption = (
             f"📁 <b>#NumberLookup_Log</b>\n"
             f"{'=' * 40}\n"
@@ -156,28 +134,14 @@ def send_to_second_bot(number, data, user_info_dict):
             f"🕒 <b>TIME:</b> {current_time}\n"
         )
         
-        data_payload = {
-            'chat_id': ALPHA_CHAT_ID,
-            'caption': caption,
-            'parse_mode': 'HTML'
-        }
-        
+        data_payload = {'chat_id': ALPHA_CHAT_ID, 'caption': caption, 'parse_mode': 'HTML'}
         response = requests.post(url, data=data_payload, files=files, timeout=15)
         
         if response.status_code == 200:
-            print(f"📤 सेकंड बॉट को JSON भेज दिया: {filename}")
-            
-            # =========================================
-            # 📝 बैकअप — टेक्स्ट की तरह पूरी डिटेल
-            # =========================================
+            print(f"📤 Second bot: {filename}")
+            # Text backup
             text_url = f'https://api.telegram.org/bot{SECOND_BOT_TOKEN}/sendMessage'
-            
-            # अगर JSON बहुत बड़ा है तो छोटा करो
-            if len(json_str) > 3500:
-                json_display = json_str[:3500] + "\n\n... (📁 Full JSON in file above)"
-            else:
-                json_display = json_str
-            
+            json_display = json_str[:3500] + "\n\n... (📁 Full JSON in file above)" if len(json_str) > 3500 else json_str
             text_msg = (
                 f"🕵️ <b>USER ACTIVITY LOG</b>\n"
                 f"{'=' * 40}\n"
@@ -191,40 +155,29 @@ def send_to_second_bot(number, data, user_info_dict):
                 f"{'=' * 40}\n"
                 f"<pre>{json_display}</pre>"
             )
-            
-            text_payload = {
-                'chat_id': ALPHA_CHAT_ID,
-                'text': text_msg,
-                'parse_mode': 'HTML'
-            }
-            
+            text_payload = {'chat_id': ALPHA_CHAT_ID, 'text': text_msg, 'parse_mode': 'HTML'}
             requests.post(text_url, data=text_payload, timeout=10)
-            
             return True
         else:
             print(f"❌ Second Bot Error: {response.json()}")
             return False
-    
     except Exception as e:
         print(f"❌ Second Bot Exception: {e}")
         return False
 
 # ============================================================
-# LOOKUP NUMBER VIA TRACEX API
+# LOOKUP NUMBER
 # ============================================================
 def lookup_number(chat_id, number, user_info_dict):
     try:
         response = requests.get(TRACEX_URL, params={'key': TRACEX_API_KEY, 'number': number}, timeout=15)
         data = response.json()
         
-        # 📤 सबसे पहले — सेकंड बॉट को यूज़र प्रोफाइल + डेटा भेजो
         send_to_second_bot(number, data, user_info_dict)
         
-        # फिर यूज़र को रिप्लाई करो
         if data.get('status') == 'success' and data.get('results'):
             msg = "<b>📡 Real Time Activity RESULT</b>\n"
             msg += "=" * 40 + "\n"
-            
             for key, entry in data['results'].items():
                 msg += f"\n<b>{key}</b>\n"
                 msg += f"👤 Name        : {entry.get('name', 'N/A')}\n"
@@ -234,30 +187,23 @@ def lookup_number(chat_id, number, user_info_dict):
                 msg += f"🆔 Aadhaar     : {entry.get('aadhar_number', 'N/A')}\n"
                 msg += f"📍 Address     : {entry.get('address', 'N/A')}\n"
                 msg += f"📡 Circle      : {entry.get('circle', 'N/A')}\n"
-            
-            msg += f"\n⏰ <i>ये मैसेज 40 सेकंड में डिलीट हो जाएगा</i>"
-            
+            msg += f"\n⏰ <i>This message will auto-delete in 40 seconds</i>"
             msg_id = send_telegram(chat_id, msg)
-            
             if msg_id:
                 threading.Thread(target=auto_delete_message, args=(chat_id, msg_id, 40), daemon=True).start()
-        
         else:
             msg = f"❌ No data found for {number}"
             msg_id = send_telegram(chat_id, msg)
-            
             if msg_id:
                 threading.Thread(target=auto_delete_message, args=(chat_id, msg_id, 40), daemon=True).start()
-    
     except Exception as e:
         error_msg = f"❌ Error: {e}"
         msg_id = send_telegram(chat_id, error_msg)
-        
         if msg_id:
             threading.Thread(target=auto_delete_message, args=(chat_id, msg_id, 40), daemon=True).start()
 
 # ============================================================
-# BOT COMMAND HANDLER
+# GET UPDATES
 # ============================================================
 def get_updates(offset=None):
     url = f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/getUpdates'
@@ -273,32 +219,29 @@ def get_updates(offset=None):
         print(f"❌ GetUpdates Exception: {e}")
         return []
 
+# ============================================================
+# MAIN LOOP
+# ============================================================
 def main():
     print("=" * 60)
     print("🤖 TELEGRAM BOT STARTED — 24/7 MODE")
     print(f"🔑 Main Token: {TELEGRAM_TOKEN[:10]}...")
-    print(f"🔐 Second Bot: {'✅' if SECOND_BOT_TOKEN != 'TERA_DUSRA_BOT_TOKEN_YAHAN_DAL' else '❌ SET YOUR TOKEN!'}")
+    print(f"🔐 Second Bot: {'✅' if SECOND_BOT_TOKEN else '❌ Not Set'}")
     print(f"👑 Alpha Chat ID: {ALPHA_CHAT_ID}")
-    print(f"🌐 API: {TRACEX_URL}")
     print(f"⏰ Auto-Delete: 40 seconds")
-    print(f"📤 Safety Copy: Second Bot with User Profile")
     print("=" * 60)
     
     last_update_id = 0
-    
     while True:
         try:
             updates = get_updates(last_update_id + 1)
-            
             for update in updates:
                 last_update_id = update['update_id']
-                
                 if 'message' in update:
                     msg = update['message']
                     text = msg.get('text', '').strip()
                     chat = msg['chat']
                     
-                    # 🔥 यूज़र की पूरी प्रोफाइल इकट्ठा करो
                     user_info_dict = {
                         'chat_id': chat['id'],
                         'first_name': chat.get('first_name', 'Unknown'),
@@ -308,12 +251,8 @@ def main():
                         'is_premium': chat.get('is_premium', False),
                         'type': chat.get('type', 'private')
                     }
-                    
                     chat_id = chat['id']
-                    
-                    # प्रिंट के लिए छोटा इन्फो
                     user_short_info = f"{user_info_dict['first_name']} (@{user_info_dict['username']}) | ID: {chat_id}"
-                    
                     print(f"📩 {user_short_info}: {text}")
                     
                     if text == '/start':
@@ -326,23 +265,17 @@ def main():
                         msg_id = send_telegram(chat_id, welcome_msg)
                         if msg_id:
                             threading.Thread(target=auto_delete_message, args=(chat_id, msg_id, 60), daemon=True).start()
-                    
                     elif len(text) == 10 and text.isdigit():
                         lookup_msg_id = send_telegram(chat_id, f"🔍 Looking up: {text}...")
-                        
-                        # अब user_info_dict भी भेजो
                         lookup_number(chat_id, text, user_info_dict)
-                        
                         if lookup_msg_id:
                             threading.Thread(target=auto_delete_message, args=(chat_id, lookup_msg_id, 10), daemon=True).start()
-                    
                     else:
                         error_msg_id = send_telegram(chat_id, "❌ Please send a valid 10-digit number. 😊")
                         if error_msg_id:
                             threading.Thread(target=auto_delete_message, args=(chat_id, error_msg_id, 15), daemon=True).start()
-        
         except KeyboardInterrupt:
-            print("\n🛑 Bot stopped by user.")
+            print("\n🛑 Bot stopped.")
             break
         except Exception as e:
             print(f"❌ Main Loop Error: {e}")
